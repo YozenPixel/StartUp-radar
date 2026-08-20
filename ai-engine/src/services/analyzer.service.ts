@@ -13,18 +13,206 @@ export const StartupAnalysisSchema = z.object({
 
 export type StartupAnalysis = z.infer<typeof StartupAnalysisSchema>;
 
+export interface AIProviderConfig {
+  provider: string;
+  name: string;
+  apiKey: string;
+  baseURL: string;
+  model: string;
+}
+
+export interface ConnectionTestResult {
+  ok: boolean;
+  provider: string;
+  model: string;
+  latencyMs?: number;
+  statusCode?: number;
+  errorType?: 'UNAUTHORIZED' | 'QUOTA_EXCEEDED' | 'CONNECTION_REFUSED' | 'NOT_FOUND' | 'UNKNOWN' | 'NO_CONFIG';
+  message: string;
+  details?: string;
+}
+
+/**
+ * Détecte et configure automatiquement le fournisseur d'IA selon la clé ou l'environnement.
+ */
+export function resolveAIConfig(): AIProviderConfig | null {
+  const apiKey =
+    process.env.AI_API_KEY ||
+    process.env.OPENAI_API_KEY ||
+    process.env.GEMINI_API_KEY ||
+    process.env.GROQ_API_KEY ||
+    process.env.OPENROUTER_API_KEY;
+
+  const explicitProvider = (process.env.AI_PROVIDER || 'auto').toLowerCase();
+  const customBaseURL = process.env.AI_BASE_URL;
+  const customModel = process.env.AI_MODEL || process.env.OPENAI_MODEL;
+
+  const isPlaceholder =
+    !apiKey ||
+    apiKey === 'sk-proj-your-openai-api-key' ||
+    apiKey === 'votre-cle-api' ||
+    apiKey.trim() === '';
+
+  // Mode local Ollama sans clé requise si l'URL locale est spécifiée
+  if (isPlaceholder && !customBaseURL && explicitProvider !== 'ollama') {
+    return null;
+  }
+
+  const effectiveKey = isPlaceholder ? 'ollama-local-key' : apiKey!.trim();
+
+  let provider = explicitProvider;
+  let baseURL = customBaseURL || 'https://api.openai.com/v1';
+  let defaultModel = 'gpt-4o-mini';
+  let friendlyName = 'OpenAI';
+
+  if (explicitProvider === 'gemini' || effectiveKey.startsWith('AIza')) {
+    provider = 'gemini';
+    friendlyName = 'Google Gemini';
+    baseURL = customBaseURL || 'https://generativelanguage.googleapis.com/v1beta/openai/';
+    defaultModel = 'gemini-2.5-flash';
+  } else if (explicitProvider === 'groq' || effectiveKey.startsWith('gsk_')) {
+    provider = 'groq';
+    friendlyName = 'Groq Cloud (LLaMA ultra-rapide)';
+    baseURL = customBaseURL || 'https://api.groq.com/openai/v1';
+    defaultModel = 'llama-3.3-70b-versatile';
+  } else if (explicitProvider === 'openrouter' || effectiveKey.startsWith('sk-or-')) {
+    provider = 'openrouter';
+    friendlyName = 'OpenRouter (Agrégateur universel)';
+    baseURL = customBaseURL || 'https://openrouter.ai/api/v1';
+    defaultModel = 'meta-llama/llama-3.3-70b-instruct';
+  } else if (explicitProvider === 'deepseek') {
+    provider = 'deepseek';
+    friendlyName = 'DeepSeek AI';
+    baseURL = customBaseURL || 'https://api.deepseek.com/v1';
+    defaultModel = 'deepseek-chat';
+  } else if (explicitProvider === 'mistral') {
+    provider = 'mistral';
+    friendlyName = 'Mistral AI';
+    baseURL = customBaseURL || 'https://api.mistral.ai/v1';
+    defaultModel = 'mistral-small-latest';
+  } else if (
+    explicitProvider === 'ollama' ||
+    customBaseURL?.includes('localhost:11434') ||
+    customBaseURL?.includes('127.0.0.1:11434')
+  ) {
+    provider = 'ollama';
+    friendlyName = 'Ollama (Modèle Local)';
+    baseURL = customBaseURL || 'http://localhost:11434/v1';
+    defaultModel = 'llama3';
+  } else if (customBaseURL) {
+    provider = 'custom';
+    friendlyName = `Serveur Personnalisé (${customBaseURL})`;
+    defaultModel = 'default';
+  }
+
+  return {
+    provider,
+    name: friendlyName,
+    apiKey: effectiveKey,
+    baseURL,
+    model: customModel || defaultModel,
+  };
+}
+
 export class AnalyzerService {
-  private openai: OpenAI | null = null;
-  private model: string;
+  private client: OpenAI | null = null;
+  public aiConfig: AIProviderConfig | null = null;
 
   constructor() {
-    const apiKey = process.env.OPENAI_API_KEY;
-    this.model = process.env.OPENAI_MODEL || 'gpt-4o-mini';
+    this.aiConfig = resolveAIConfig();
 
-    if (apiKey && apiKey !== 'sk-proj-your-openai-api-key') {
-      this.openai = new OpenAI({ apiKey });
-    } else {
-      console.warn('⚠️ OPENAI_API_KEY non configurée ou valeur par défaut : mode heuristique / fallback activé.');
+    if (this.aiConfig) {
+      this.client = new OpenAI({
+        apiKey: this.aiConfig.apiKey,
+        baseURL: this.aiConfig.baseURL,
+      });
+    }
+  }
+
+  /**
+   * Effectue un test de connexion préalable (healthcheck) auprès du fournisseur IA configuré.
+   */
+  async testConnection(): Promise<ConnectionTestResult> {
+    if (!this.aiConfig || !this.client) {
+      return {
+        ok: false,
+        provider: 'Non configuré',
+        model: 'Aucun',
+        errorType: 'NO_CONFIG',
+        message: 'Aucune clé API configurée dans .env (variables AI_API_KEY ou OPENAI_API_KEY).',
+      };
+    }
+
+    const startTime = Date.now();
+    try {
+      // Test léger avec une mini-complétion de 5 tokens maximum
+      await this.client.chat.completions.create({
+        model: this.aiConfig.model,
+        messages: [{ role: 'user', content: 'Ping. Réponds par "pong".' }],
+        max_tokens: 5,
+        temperature: 0,
+      });
+
+      const latencyMs = Date.now() - startTime;
+      return {
+        ok: true,
+        provider: this.aiConfig.name,
+        model: this.aiConfig.model,
+        latencyMs,
+        message: `Connexion validée avec succès auprès de ${this.aiConfig.name} (Modèle: ${this.aiConfig.model}, Latence: ${latencyMs}ms)`,
+      };
+    } catch (error: any) {
+      const latencyMs = Date.now() - startTime;
+      const status = error.status || error.statusCode;
+      const rawMessage = error.message || String(error);
+
+      let errorType: ConnectionTestResult['errorType'] = 'UNKNOWN';
+      let userFriendlyMessage = `Erreur inattendue lors de la connexion (${rawMessage})`;
+
+      if (
+        status === 401 ||
+        rawMessage.includes('401') ||
+        rawMessage.toLowerCase().includes('incorrect api key') ||
+        rawMessage.toLowerCase().includes('unauthorized') ||
+        rawMessage.toLowerCase().includes('invalid api key')
+      ) {
+        errorType = 'UNAUTHORIZED';
+        userFriendlyMessage = `Clé API invalide, expirée ou non autorisée pour le fournisseur ${this.aiConfig.name}.`;
+      } else if (
+        status === 429 ||
+        rawMessage.includes('429') ||
+        rawMessage.toLowerCase().includes('quota') ||
+        rawMessage.toLowerCase().includes('rate limit')
+      ) {
+        errorType = 'QUOTA_EXCEEDED';
+        userFriendlyMessage = `Quota dépassé ou crédits insuffisants sur votre compte ${this.aiConfig.name}.`;
+      } else if (
+        status === 404 ||
+        rawMessage.includes('404') ||
+        rawMessage.toLowerCase().includes('model not found')
+      ) {
+        errorType = 'NOT_FOUND';
+        userFriendlyMessage = `Le modèle "${this.aiConfig.model}" est introuvable ou non supporté par ${this.aiConfig.name}.`;
+      } else if (
+        error.code === 'ECONNREFUSED' ||
+        error.code === 'ENOTFOUND' ||
+        rawMessage.includes('ECONNREFUSED') ||
+        rawMessage.includes('fetch failed')
+      ) {
+        errorType = 'CONNECTION_REFUSED';
+        userFriendlyMessage = `Impossible de contacter l'endpoint ${this.aiConfig.baseURL}. Vérifiez votre accès réseau ou l'état du serveur local.`;
+      }
+
+      return {
+        ok: false,
+        provider: this.aiConfig.name,
+        model: this.aiConfig.model,
+        latencyMs,
+        statusCode: status,
+        errorType,
+        message: userFriendlyMessage,
+        details: rawMessage,
+      };
     }
   }
 
@@ -38,7 +226,7 @@ export class AnalyzerService {
     });
 
     if (!startup) {
-      console.error(`Startup introuvable avec l'ID : ${startupId}`);
+      console.error(`❌ Startup introuvable avec l'ID : ${startupId}`);
       return null;
     }
 
@@ -85,15 +273,29 @@ export class AnalyzerService {
   }
 
   /**
-   * Génération de l'analyse via OpenAI ou Fallback heuristique.
+   * Nettoie les éventuels blocs de code Markdown (```json ... ```) renvoyés par certains LLMs.
+   */
+  private cleanJsonString(raw: string): string {
+    let cleaned = raw.trim();
+    if (cleaned.startsWith('```json')) {
+      cleaned = cleaned.substring(7);
+    } else if (cleaned.startsWith('```')) {
+      cleaned = cleaned.substring(3);
+    }
+    if (cleaned.endsWith('```')) {
+      cleaned = cleaned.substring(0, cleaned.length - 3);
+    }
+    return cleaned.trim();
+  }
+
+  /**
+   * Génération de l'analyse via LLM connecté ou Fallback heuristique.
    */
   private async generateAnalysis(startup: any): Promise<StartupAnalysis> {
-    const totalFunding = startup.fundingRound?.reduce(
-      (acc: number, curr: any) => acc + (curr.amount || 0),
-      0,
-    ) || 0;
+    const totalFunding =
+      startup.fundingRound?.reduce((acc: number, curr: any) => acc + (curr.amount || 0), 0) || 0;
 
-    if (!this.openai) {
+    if (!this.client || !this.aiConfig) {
       return this.generateHeuristicAnalysis(startup, totalFunding);
     }
 
@@ -125,43 +327,48 @@ Répondez exclusivement au format JSON conforme au schéma suivant :
 }
 `;
 
-      const response = await this.openai.chat.completions.create({
-        model: this.model,
+      const response = await this.client.chat.completions.create({
+        model: this.aiConfig.model,
         messages: [
           {
             role: 'system',
-            content: "Tu es un expert BI & VC d'élite. Tu retournes uniquement un JSON valide.",
+            content: "Tu es un expert BI & VC d'élite. Tu retournes uniquement un JSON valide sans texte superflu.",
           },
           { role: 'user', content: prompt },
         ],
-        response_format: { type: 'json_object' },
-        temperature: 0.3,
+        temperature: 0.2,
       });
 
       const rawContent = response.choices[0]?.message?.content || '{}';
-      const parsed = JSON.parse(rawContent);
+      const cleaned = this.cleanJsonString(rawContent);
+      const parsed = JSON.parse(cleaned);
 
       const validated = StartupAnalysisSchema.safeParse(parsed);
       if (validated.success) {
         return validated.data;
       }
 
-      console.warn('Format JSON invalide reçu de OpenAI, bascule vers le fallback structuré.');
+      console.warn('⚠️ Format JSON partiel reçu du modèle, bascule vers le fallback structuré.');
       return this.generateHeuristicAnalysis(startup, totalFunding);
     } catch (error) {
-      console.error("Erreur d'appel OpenAI :", (error as Error).message);
+      console.error(`❌ Erreur d'appel API IA (${this.aiConfig.name}) :`, (error as Error).message);
       return this.generateHeuristicAnalysis(startup, totalFunding);
     }
   }
 
   /**
-   * Analyse heuristique locale si OpenAI est indisponible.
+   * Analyse heuristique locale si le modèle IA est indisponible ou non configuré.
    */
   private generateHeuristicAnalysis(startup: any, totalFunding: number): StartupAnalysis {
     let baseScore = 6;
 
     const sectorLower = (startup.sector || '').toLowerCase();
-    if (sectorLower.includes('ai') || sectorLower.includes('intelligence') || sectorLower.includes('cyber') || sectorLower.includes('health')) {
+    if (
+      sectorLower.includes('ai') ||
+      sectorLower.includes('intelligence') ||
+      sectorLower.includes('cyber') ||
+      sectorLower.includes('health')
+    ) {
       baseScore += 2;
     }
 
@@ -178,16 +385,19 @@ Répondez exclusivement au format JSON conforme au schéma suivant :
       score: finalScore,
       keySignals: [
         `Taille d'équipe déclarée : ${startup.size}`,
-        totalFunding > 0 ? `Levées cumulées : ${totalFunding.toLocaleString('fr-FR')} €` : "Croissance sur fonds propres (Bootstrapped)",
+        totalFunding > 0
+          ? `Levées cumulées : ${totalFunding.toLocaleString('fr-FR')} €`
+          : 'Croissance sur fonds propres (Bootstrapped)',
         `Secteur d'activité stratégique : ${startup.sector}`,
       ],
       risks: [
         'Pression concurrentielle croissante sur le segment',
         'Nécessité de maintenir un rythme soutenu d’acquisition client',
       ],
-      opportunityVerdict: finalScore >= 8
-        ? "Cible hautement prioritaire pour investissement, partenariat stratégique ou recrutement clé."
-        : "Opportunité solide à placer sous surveillance active.",
+      opportunityVerdict:
+        finalScore >= 8
+          ? 'Cible hautement prioritaire pour investissement, partenariat stratégique ou recrutement clé.'
+          : 'Opportunité solide à placer sous surveillance active.',
     };
   }
 }

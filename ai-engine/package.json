@@ -8,6 +8,7 @@
     "start": "node dist/index.js",
     "dev": "ts-node src/index.ts",
     "analyze": "ts-node src/index.ts --all",
+    "test:connection": "ts-node src/index.ts --test",
     "test": "echo \"No tests specified for ai-engine\""
   },
   "keywords": [],

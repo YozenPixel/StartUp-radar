@@ -61,9 +61,11 @@ flowchart TD
 - Collecte multi-sources des informations clés (nom, secteur, pays, effectifs, levées de fonds associées).
 - Système anti-doublon basé sur le nom normalisé et la date des financements pour éviter toute redondance en base.
 
-### 2. 🤖 Moteur de Scoring & Synthèse IA
-- Analyse automatique des opportunités via **OpenAI GPT-4o** avec validation stricte par schéma **Zod**.
-- **Indicateurs calculés** :
+### 2. 🤖 Moteur de Scoring & Synthèse IA Multi-Fournisseurs
+- Support universel de tous les fournisseurs de LLMs (**OpenAI**, **Google Gemini**, **Groq**, **DeepSeek**, **OpenRouter**, **Mistral**, ou **Ollama** en local) avec détection automatique du format de clé.
+- **Healthcheck & Test de connexion au démarrage** : vérification préalable de la validité de la clé, de l'état du serveur et de la latence avant traitement.
+- **Diagnostics précis d'erreurs** : identification immédiate des erreurs d'authentification (401), quotas dépassés (429) ou serveurs inaccessibles.
+- **Indicateurs calculés** (validation stricte par schéma **Zod**) :
   - **Score de Potentiel (1 à 10)** : Évaluation de la viabilité et de l'attractivité.
   - **Signaux Forts** : Détection des moteurs de croissance (financement, taille d'équipe, secteur d'avenir).
   - **Risques Identifiés** : Analyse des menaces concurrentielles et des barrières à l'entrée.
@@ -93,7 +95,7 @@ flowchart TD
 | :--- | :--- | :--- |
 | **[`frontend/`](file:///c:/Projects/StartupRadar/frontend)** | Interface utilisateur SPA réactive et moderne | Vite 6, React 19, TypeScript, Tailwind CSS v4, shadcn/ui |
 | **[`backend/`](file:///c:/Projects/StartupRadar/backend)** | API Gateway REST, authentification, gestion des startups et KPI | NestJS 11, Prisma 7, PostgreSQL 16, Passport JWT |
-| **[`ai-engine/`](file:///c:/Projects/StartupRadar/ai-engine)** | Analyse sémantique, extraction de signaux et scoring prédictif | OpenAI API, Zod, TypeScript |
+| **[`ai-engine/`](file:///c:/Projects/StartupRadar/ai-engine)** | Analyse sémantique, extraction de signaux et scoring prédictif (Multi-Provider) | OpenAI/Gemini/Groq/Ollama, Zod, TypeScript |
 | **[`scrapers/`](file:///c:/Projects/StartupRadar/scrapers)** | Extraction web distribuée, déduplication et ingestion en base | Playwright, TypeScript, PrismaPg |
 | **[`report-service/`](file:///c:/Projects/StartupRadar/report-service)** | Générateur de digests exécutifs et de rapports de veille | Node.js, TypeScript, Markdown Generator |
 | **[`infrastructure/`](file:///c:/Projects/StartupRadar/infrastructure)** | Déploiement conteneurisé et orchestration de production | Dockerfiles multi-stage, Docker Compose |
@@ -116,7 +118,7 @@ npm install
 ```bash
 cp .env.example .env
 ```
-*(Personnalisez les clés dans `.env` si vous souhaitez utiliser votre clé `OPENAI_API_KEY` ou modifier les ports).*
+*(Personnalisez vos clés dans `.env` : `AI_API_KEY`, `DATABASE_URL`, etc.).*
 
 ### 3. Démarrage des bases de données (Docker)
 ```bash
@@ -140,6 +142,7 @@ npm run dev:frontend      # Démarre l'interface Vite SPA sur http://localhost:3
 # -------------------------------------------------------------
 # TÂCHES DE DONNÉES & IA
 # -------------------------------------------------------------
+npm run test:ai           # Teste la validité de la clé API et la connectivité IA (Healthcheck)
 npm run scrape            # Lance les scrapers et ingère les startups en base
 npm run analyze           # Évalue par IA toutes les startups sans score
 npm run generate:report   # Génère un nouveau digest de marché dans generated-reports/
