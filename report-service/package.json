@@ -1,0 +1,28 @@
+{
+  "name": "report-service",
+  "version": "1.0.0",
+  "description": "StartupRadar Market Intelligence & Report Generation Service",
+  "main": "dist/index.js",
+  "scripts": {
+    "build": "tsc",
+    "start": "node dist/index.js",
+    "dev": "ts-node src/index.ts",
+    "generate": "ts-node src/index.ts",
+    "test": "echo \"No tests specified for report-service\""
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@prisma/adapter-pg": "^7.9.1",
+    "@prisma/client": "^7.8.0",
+    "@types/pg": "^8.23.1",
+    "dotenv": "^17.4.2",
+    "pg": "^8.23.0"
+  },
+  "devDependencies": {
+    "@types/node": "^20.19.43",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.7.3"
+  }
+}

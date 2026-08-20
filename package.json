@@ -1,0 +1,26 @@
+{
+  "name": "startupradar",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev:backend": "npm run start:dev --workspace=backend",
+    "dev:frontend": "npm run dev --workspace=frontend",
+    "dev:ai": "npm run dev --workspace=ai-engine",
+    "dev:scrapers": "npm run dev --workspace=scrapers",
+    "dev:report": "npm run dev --workspace=report-service",
+    "scrape": "npm run dev --workspace=scrapers",
+    "analyze": "npm run dev --workspace=ai-engine",
+    "generate:report": "npm run generate --workspace=report-service",
+    "start:dev": "npm run start:dev --workspace=backend",
+    "build": "npm run build --workspaces --if-present",
+    "test": "npm run test --workspaces --if-present",
+    "lint": "npm run lint --workspaces --if-present"
+  },
+  "workspaces": [
+    "frontend",
+    "backend",
+    "ai-engine",
+    "scrapers",
+    "report-service"
+  ]
+}
