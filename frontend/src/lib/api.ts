@@ -1,12 +1,33 @@
 import {
   DashboardMetrics,
   FindStartupsParams,
+  FundingRound,
   Startup,
   StartupsResponse,
 } from '@/features/dashboard/types/startup';
+import { AuthResponse, LoginDto, RegisterDto, User } from '@/features/auth/types/auth';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || 'http://localhost:3001';
+
+export function getAuthToken(): string | null {
+  try {
+    return localStorage.getItem('startupradar_token');
+  } catch {
+    return null;
+  }
+}
+
+export function getAuthHeaders(): Record<string, string> {
+  const headers: Record<string, string> = {
+    'Content-Type': 'application/json',
+  };
+  const token = getAuthToken();
+  if (token) {
+    headers['Authorization'] = `Bearer ${token}`;
+  }
+  return headers;
+}
 
 const FALLBACK_STARTUPS: Startup[] = [
   {
@@ -77,16 +98,43 @@ const FALLBACK_METRICS: DashboardMetrics = {
   averageScore: 7.6,
 };
 
+export async function loginUser(dto: LoginDto): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/login`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Identifiants invalides' }));
+    throw new Error(err.message || 'Échec de la connexion');
+  }
+
+  return res.json();
+}
+
+export async function registerUser(dto: RegisterDto): Promise<AuthResponse> {
+  const res = await fetch(`${API_BASE_URL}/auth/register`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/json' },
+    body: JSON.stringify(dto),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Erreur lors de l\'inscription' }));
+    throw new Error(err.message || 'Échec de l\'inscription');
+  }
+
+  return res.json();
+}
+
 export async function fetchMetrics(): Promise<{ data: DashboardMetrics; isLive: boolean }> {
   try {
     const res = await fetch(`${API_BASE_URL}/startups/metrics`, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
     });
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const data: DashboardMetrics = await res.json();
     return { data, isLive: true };
   } catch (error) {
@@ -109,13 +157,10 @@ export async function fetchStartups(
 
     const url = `${API_BASE_URL}/startups${query.toString() ? `?${query.toString()}` : ''}`;
     const res = await fetch(url, {
-      headers: { 'Content-Type': 'application/json' },
+      headers: getAuthHeaders(),
     });
 
-    if (!res.ok) {
-      throw new Error(`HTTP ${res.status}`);
-    }
-
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
     const json: StartupsResponse = await res.json();
     return { data: json, isLive: true };
   } catch (error) {
@@ -157,4 +202,97 @@ export async function fetchStartups(
       isLive: false,
     };
   }
+}
+
+export async function fetchStartupById(id: string): Promise<{ data: Startup | null; isLive: boolean }> {
+  try {
+    const res = await fetch(`${API_BASE_URL}/startups/${id}`, {
+      headers: getAuthHeaders(),
+    });
+
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    const data: Startup = await res.json();
+    return { data, isLive: true };
+  } catch (error) {
+    console.warn(`API non joignable pour startup ${id}, recherche locale fallback :`, error);
+    const local = FALLBACK_STARTUPS.find((s) => s.id === id) || null;
+    return { data: local, isLive: false };
+  }
+}
+
+export async function createStartup(data: {
+  name: string;
+  sector: string;
+  country: string;
+  size: string;
+  summary?: string;
+  score?: number;
+}): Promise<Startup> {
+  const res = await fetch(`${API_BASE_URL}/startups`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Erreur lors de la création' }));
+    throw new Error(err.message || `Erreur HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function updateStartup(
+  id: string,
+  data: Partial<{
+    name: string;
+    sector: string;
+    country: string;
+    size: string;
+    summary?: string;
+    score?: number;
+  }>,
+): Promise<Startup> {
+  const res = await fetch(`${API_BASE_URL}/startups/${id}`, {
+    method: 'PATCH',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Erreur lors de la modification' }));
+    throw new Error(err.message || `Erreur HTTP ${res.status}`);
+  }
+
+  return res.json();
+}
+
+export async function deleteStartup(id: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/startups/${id}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+
+  if (!res.ok) {
+    throw new Error(`Erreur HTTP ${res.status} lors de la suppression`);
+  }
+}
+
+export async function createFundingRound(data: {
+  startupId: string;
+  amount: number;
+  date: string;
+}): Promise<FundingRound> {
+  const res = await fetch(`${API_BASE_URL}/funding-rounds`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify(data),
+  });
+
+  if (!res.ok) {
+    const err = await res.json().catch(() => ({ message: 'Erreur lors de l\'ajout du tour' }));
+    throw new Error(err.message || `Erreur HTTP ${res.status}`);
+  }
+
+  return res.json();
 }

@@ -30,7 +30,7 @@ model Startup {
 model FundingRound {
   id        String   @id @default(uuid())
   startupId String
-  startup   Startup  @relation(fields: [startupId], references: [id])
+  startup   Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
   amount    Float
   date      DateTime
   createdAt DateTime @default(now())
