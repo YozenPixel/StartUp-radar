@@ -9,6 +9,7 @@ import { UsersModule } from './users/users.module';
 import { PrismaModule } from './prisma/prisma.module';
 import { StartupsModule } from './startups/startups.module';
 import { FundingRoundsModule } from './funding-rounds/funding-rounds.module';
+import { WatchlistModule } from './watchlist/watchlist.module';
 import { HealthModule } from './health/health.module';
 
 @Module({
@@ -28,6 +29,7 @@ import { HealthModule } from './health/health.module';
     PrismaModule,
     StartupsModule,
     FundingRoundsModule,
+    WatchlistModule,
     HealthModule,
   ],
   controllers: [AppController],

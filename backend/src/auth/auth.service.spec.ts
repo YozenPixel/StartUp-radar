@@ -31,9 +31,23 @@ describe('AuthService', () => {
     expect(service).toBeDefined();
   });
 
-  it('should generate a token upon login', async () => {
-    const result = await service.login({ email: 'test@example.com', id: 'user-uuid' });
-    expect(result).toEqual({ access_token: 'mock-jwt-token' });
-    expect(mockJwtService.sign).toHaveBeenCalledWith({ email: 'test@example.com', sub: 'user-uuid' });
+  it('should generate a token and user session upon login', async () => {
+    const user = { email: 'test@example.com', id: 'user-uuid', name: 'Alex', role: 'ANALYST' };
+    const result = await service.login(user);
+    expect(result).toEqual({
+      access_token: 'mock-jwt-token',
+      user: {
+        id: 'user-uuid',
+        email: 'test@example.com',
+        name: 'Alex',
+        role: 'ANALYST',
+      },
+    });
+    expect(mockJwtService.sign).toHaveBeenCalledWith({
+      email: 'test@example.com',
+      sub: 'user-uuid',
+      role: 'ANALYST',
+      name: 'Alex',
+    });
   });
 });

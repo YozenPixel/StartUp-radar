@@ -6,25 +6,41 @@ datasource db {
   provider = "postgresql"
 }
 
+enum Role {
+  ADMIN
+  ANALYST
+  VIEWER
+}
+
 model User {
-  id        String   @id @default(uuid())
-  email     String   @unique
+  id        String          @id @default(uuid())
+  email     String          @unique
   password  String
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  name      String?
+  role      Role            @default(ANALYST)
+  watchlist WatchlistItem[]
+  createdAt DateTime        @default(now())
+  updatedAt DateTime        @updatedAt
 }
 
 model Startup {
-  id           String         @id @default(uuid())
-  name         String
-  sector       String
-  country      String
-  size         String
-  fundingRound FundingRound[]
-  summary      String?
-  score        Int?
-  createdAt    DateTime       @default(now())
-  updatedAt    DateTime       @updatedAt
+  id             String          @id @default(uuid())
+  name           String
+  sector         String
+  country        String
+  size           String
+  stage          String?
+  websiteUrl     String?
+  logoUrl        String?
+  founders       String?
+  linkedinUrl    String?
+  summary        String?
+  score          Int?
+  fundingRound   FundingRound[]
+  watchlistItems WatchlistItem[]
+  signals        MarketSignal[]
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
 }
 
 model FundingRound {
@@ -34,4 +50,26 @@ model FundingRound {
   amount    Float
   date      DateTime
   createdAt DateTime @default(now())
+}
+
+model WatchlistItem {
+  id        String   @id @default(uuid())
+  userId    String
+  user      User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  startupId String
+  startup   Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  notes     String?
+  createdAt DateTime @default(now())
+
+  @@unique([userId, startupId])
+}
+
+model MarketSignal {
+  id              String   @id @default(uuid())
+  startupId       String
+  startup         Startup  @relation(fields: [startupId], references: [id], onDelete: Cascade)
+  type            String
+  description     String
+  confidenceScore Float    @default(0.8)
+  detectedAt      DateTime @default(now())
 }

@@ -1,7 +1,7 @@
 import { Injectable, ConflictException } from '@nestjs/common';
 import { PrismaService } from '../prisma/prisma.service';
 import * as bcrypt from 'bcrypt';
-import { User } from '@prisma/client';
+import { User, Role } from '@prisma/client';
 
 export type SanitizedUser = Omit<User, 'password'>;
 
@@ -9,7 +9,12 @@ export type SanitizedUser = Omit<User, 'password'>;
 export class UsersService {
   constructor(private prisma: PrismaService) {}
 
-  async create(data: { email: string; password: string }): Promise<SanitizedUser> {
+  async create(data: {
+    email: string;
+    password: string;
+    name?: string;
+    role?: Role;
+  }): Promise<SanitizedUser> {
     const existing = await this.findByEmail(data.email);
     if (existing) {
       throw new ConflictException('Un compte existe déjà avec cette adresse email');
@@ -20,6 +25,8 @@ export class UsersService {
       data: {
         email: data.email,
         password: hashedPassword,
+        name: data.name || null,
+        role: data.role || Role.ANALYST,
       },
     });
 

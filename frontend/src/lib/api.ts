@@ -5,7 +5,7 @@ import {
   Startup,
   StartupsResponse,
 } from '@/features/dashboard/types/startup';
-import { AuthResponse, LoginDto, RegisterDto, User } from '@/features/auth/types/auth';
+import { AuthResponse, LoginDto, RegisterDto } from '@/features/auth/types/auth';
 
 const API_BASE_URL =
   import.meta.env.VITE_API_URL || 'http://localhost:3001';
@@ -294,5 +294,40 @@ export async function createFundingRound(data: {
     throw new Error(err.message || `Erreur HTTP ${res.status}`);
   }
 
+  return res.json();
+}
+
+// --- Watchlist Cloud APIs ---
+export async function fetchCloudWatchlist(): Promise<Startup[]> {
+  const res = await fetch(`${API_BASE_URL}/watchlist`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  return res.json();
+}
+
+export async function addToCloudWatchlist(startupId: string, notes?: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/watchlist/${startupId}`, {
+    method: 'POST',
+    headers: getAuthHeaders(),
+    body: JSON.stringify({ notes }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+export async function removeFromCloudWatchlist(startupId: string): Promise<void> {
+  const res = await fetch(`${API_BASE_URL}/watchlist/${startupId}`, {
+    method: 'DELETE',
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+}
+
+// --- Signaux de Marché APIs ---
+export async function fetchStartupSignals(startupId: string) {
+  const res = await fetch(`${API_BASE_URL}/startups/${startupId}/signals`, {
+    headers: getAuthHeaders(),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
   return res.json();
 }

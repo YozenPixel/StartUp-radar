@@ -20,6 +20,10 @@ describe('StartupsService', () => {
       count: jest.fn(),
       deleteMany: jest.fn(),
     },
+    marketSignal: {
+      findMany: jest.fn(),
+      create: jest.fn(),
+    },
   };
 
   beforeEach(async () => {
@@ -82,5 +86,27 @@ describe('StartupsService', () => {
     mockPrismaService.startup.findUnique.mockResolvedValue(null);
 
     await expect(service.findOne('invalid-id')).rejects.toThrow(NotFoundException);
+  });
+
+  it('should get market signals for a startup', async () => {
+    mockPrismaService.startup.findUnique.mockResolvedValue({ id: 'uuid-1', name: 'Alpha AI' });
+    const mockSignals = [{ id: 'sig-1', type: 'HIRING_SURGE', description: 'Tech hiring' }];
+    mockPrismaService.marketSignal.findMany.mockResolvedValue(mockSignals);
+
+    const signals = await service.getSignals('uuid-1');
+    expect(signals).toEqual(mockSignals);
+  });
+
+  it('should create a market signal for a startup', async () => {
+    mockPrismaService.startup.findUnique.mockResolvedValue({ id: 'uuid-1', name: 'Alpha AI' });
+    const mockSignal = { id: 'sig-1', type: 'HIRING_SURGE', description: 'Tech hiring', confidenceScore: 0.9 };
+    mockPrismaService.marketSignal.create.mockResolvedValue(mockSignal);
+
+    const signal = await service.createSignal('uuid-1', {
+      type: 'HIRING_SURGE',
+      description: 'Tech hiring',
+      confidenceScore: 0.9,
+    });
+    expect(signal).toEqual(mockSignal);
   });
 });

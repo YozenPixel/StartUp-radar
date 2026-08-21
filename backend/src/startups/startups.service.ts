@@ -3,10 +3,11 @@ import { PrismaService } from '../prisma/prisma.service';
 import { CreateStartupDto } from './dto/create-startup.dto';
 import { UpdateStartupDto } from './dto/update-startup.dto';
 import { FindStartupsQueryDto } from './dto/find-startups-query.dto';
+import { CreateMarketSignalDto } from './dto/create-market-signal.dto';
 import { Prisma, Startup } from '@prisma/client';
 
 export interface PaginatedStartupsResponse {
-  data: (Startup & { fundingRound?: any[] })[];
+  data: (Startup & { fundingRound?: any[]; signals?: any[] })[];
   total: number;
   page: number;
   limit: number;
@@ -62,6 +63,10 @@ export class StartupsService {
           fundingRound: {
             orderBy: { date: 'desc' },
           },
+          signals: {
+            orderBy: { detectedAt: 'desc' },
+            take: 3,
+          },
         },
       }),
     ]);
@@ -105,6 +110,9 @@ export class StartupsService {
         fundingRound: {
           orderBy: { date: 'desc' },
         },
+        signals: {
+          orderBy: { detectedAt: 'desc' },
+        },
       },
     });
 
@@ -146,6 +154,29 @@ export class StartupsService {
 
     return this.prisma.startup.delete({
       where: { id },
+    });
+  }
+
+  // --- Gestion des Signaux de Marché ---
+  async getSignals(startupId: string) {
+    await this.findOne(startupId);
+
+    return this.prisma.marketSignal.findMany({
+      where: { startupId },
+      orderBy: { detectedAt: 'desc' },
+    });
+  }
+
+  async createSignal(startupId: string, dto: CreateMarketSignalDto) {
+    await this.findOne(startupId);
+
+    return this.prisma.marketSignal.create({
+      data: {
+        startupId,
+        type: dto.type,
+        description: dto.description,
+        confidenceScore: dto.confidenceScore ?? 0.8,
+      },
     });
   }
 }

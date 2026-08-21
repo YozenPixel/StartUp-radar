@@ -12,6 +12,8 @@ describe('StartupsController', () => {
     create: jest.fn(),
     update: jest.fn(),
     remove: jest.fn(),
+    getSignals: jest.fn(),
+    createSignal: jest.fn(),
   };
 
   beforeEach(async () => {
@@ -45,5 +47,22 @@ describe('StartupsController', () => {
     const result = await controller.findAll(query);
     expect(result).toEqual(paginated);
     expect(mockStartupsService.findAll).toHaveBeenCalledWith(query);
+  });
+
+  it('should get signals for a startup', async () => {
+    mockStartupsService.getSignals.mockResolvedValue([{ id: 'sig-1', type: 'HIRING_SURGE' }]);
+
+    const result = await controller.getSignals('uuid-1');
+    expect(result).toHaveLength(1);
+    expect(mockStartupsService.getSignals).toHaveBeenCalledWith('uuid-1');
+  });
+
+  it('should create a market signal for a startup', async () => {
+    const dto = { type: 'HIRING_SURGE', description: 'Tech hiring', confidenceScore: 0.9 };
+    mockStartupsService.createSignal.mockResolvedValue({ id: 'sig-1', ...dto });
+
+    const result = await controller.createSignal('uuid-1', dto);
+    expect(result.id).toBe('sig-1');
+    expect(mockStartupsService.createSignal).toHaveBeenCalledWith('uuid-1', dto);
   });
 });
